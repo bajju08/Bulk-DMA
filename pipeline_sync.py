@@ -40,18 +40,34 @@ def auth_google():
 
 def fetch_nse_data(deal_type="Bulk deals"):
 
+    from playwright.sync_api import sync_playwright
+
     with sync_playwright() as p:
 
         browser = p.chromium.launch(
-            headless=True
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-http2"
+            ]
         )
 
-        page = browser.new_page()
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            ignore_https_errors=True
+        )
 
+        page = context.new_page()
+
+        # First initialize cookies
         page.goto(
-            "https://www.nseindia.com/report-detail/display-bulk-and-block-deals",
-            wait_until="networkidle",
-            timeout=120000
+            "https://www.nseindia.com",
+            wait_until="domcontentloaded",
+            timeout=60000
         )
 
         time.sleep(5)
@@ -72,15 +88,19 @@ def fetch_nse_data(deal_type="Bulk deals"):
                 "?dealType=Block%20deals"
             )
 
-        response = page.goto(api_url)
+        response = context.request.get(
+            api_url,
+            headers={
+                "accept": "application/json, text/plain, */*",
+                "referer": "https://www.nseindia.com/",
+            }
+        )
 
         data = response.json()
 
         browser.close()
 
         return data.get("data", [])
-
-
 # =========================
 # BUILD DATAFRAME
 # =========================
