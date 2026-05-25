@@ -3,9 +3,6 @@ name: NSE BULK DMA
 on:
   workflow_dispatch:
 
-  schedule:
-    - cron: '15 11 * * 1-5'
-
 jobs:
 
   sync:
@@ -14,17 +11,16 @@ jobs:
 
     steps:
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
+          playwright install chromium
 
       - name: Run Script
         env:
