@@ -1,0 +1,32 @@
+name: Velocity Market Decoder Data Pipeline Sync
+
+on:
+  schedule:
+    # Executes automatically at 4:45 PM IST (11:15 AM UTC) Monday through Friday
+    - cron: '15 11 * * 1-5'
+  workflow_dispatch:
+    # Allows you to trigger the data sync manually from your GitHub account dashboard whenever you want
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository Core Code
+      uses: actions/checkout@v4
+
+    - name: Set Up Python Environment Runtime
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+
+    - name: Install Architecture Library Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Execute Smart Money Flow Sync Script
+      env:
+        GOOGLE_CREDS_SECRET: ${{ secrets.GOOGLE_CREDS_SECRET }}
+      run: python pipeline_sync.py
