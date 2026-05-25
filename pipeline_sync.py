@@ -4,13 +4,12 @@ import random
 import time
 import gspread
 from google.oauth2.service_account import Credentials
-# Upgrading to curl_cffi to perfectly match the browser JA3 handshake signature
 from curl_cffi import requests
 
 # ══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION ENGINE
 # ══════════════════════════════════════════════════════════════════════════
-SPREADSHEET_ID = "1vnrsybq4tX4BFvDupY5y8oxFLh0LyuPF_dm-viSqxWM"  # <-- Ensure your real Sheet ID string is pasted here
+SPREADSHEET_ID = "1vnrsybq4tX4BFvDupY5y8oxFLh0LyuPF_dm-viSqxWM"  # <-- Paste your actual Google Sheet ID string here
 
 BULK_HEADERS = ['DATE', 'SYMBOL', 'SECURITY NAME', 'CLIENT NAME', 'TYPE', 'QUANTITY', 'EXECUTION PRICE', 'VALUE (₹ CR)', 'INSTITUTION_FLAG', 'SIZE INDEX', 'SIGNAL FIELD']
 BLOCK_HEADERS = ['DATE', 'SYMBOL', 'SECURITY NAME', 'CLIENT NAME', 'TYPE', 'QUANTITY', 'PRICE', 'VALUE (₹ CR)', 'INSTITUTION_FLAG', 'INTERCEPT SIGNAL']
@@ -22,66 +21,78 @@ INSTITUTIONS = [
 ]
 
 def extract_data_robustly(json_response):
-    """Scans the JSON payload dynamically across nested keys to locate transaction rows."""
+    """Dynamic scanner that hunts across all potential JSON object shapes to extract lists."""
     if isinstance(json_response, list):
         return json_response
     if isinstance(json_response, dict):
-        for key in ['data', 'DATA', 'bulk_deals_data', 'block_deals_data', 'bulkDeals', 'blockDeals']:
+        # Look for typical data containment blocks used by the exchange
+        for key in ['data', 'DATA', 'bulk_deals_data', 'block_deals_data', 'bulkDeals', 'blockDeals', 'dataList']:
             val = json_response.get(key)
             if isinstance(val, list) and len(val) > 0:
                 return val
             elif isinstance(val, dict):
-                for sub_key in ['data', 'DATA']:
+                for sub_key in ['data', 'DATA', 'dataList']:
                     sub_val = val.get(sub_key)
                     if isinstance(sub_val, list) and len(sub_val) > 0:
                         return sub_val
+        # Emergency escape hatch: if any root key holds a non-empty array, extract it
         for val in json_response.values():
             if isinstance(val, list) and len(val) > 0:
                 return val
     return []
 
 def fetch_nse_large_deals(deal_type="bulk_deals"):
-    """Fetches large deals using a hardened browser emulation session."""
-    cache_buster = random.randint(10000, 99999)
-    url = f"https://www.nseindia.com/api/large-deals?type={deal_type}&v={cache_buster}"
-    
-    # Standard header dictionary routing structure
-    headers = {
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.nseindia.com/market-data/large-deals",
-        "X-Requested-With": "XMLHttpRequest"
-    }
-    
+    """Fetches transaction data using an adaptive browser session emulation layer."""
+    session = None
     try:
-        # Initialize the curl_cffi session explicitly impersonating a real Chrome browser instance
-        print(f"[+] Spawning browser session instance for {deal_type}...")
+        # Spawn a hardened Chrome instance via curl_cffi
         session = requests.Session(impersonate="chrome")
         
-        # Phase 1: Establish base session cookies from the index landing domain
-        print("[+] Phase 1: Registering session tokens at home node...")
+        # Step 1: Pre-warm base application cookies at the primary domain root
+        print(f"[+] Initializing endpoint handshakes for {deal_type}...")
         session.get("https://www.nseindia.com/", timeout=15)
         time.sleep(2)
         
-        # Phase 2: Load the container template frame to unlock API pathways
-        print("[+] Phase 2: Syncing container framework context...")
+        # Step 2: Establish transaction tracking framework cookies
         session.get("https://www.nseindia.com/market-data/large-deals", timeout=15)
         time.sleep(3)
         
-        # Phase 3: Securely extract data payload directly from the active pipeline
-        print(f"[+] Phase 3: Requesting data stream with matched cipher signatures...")
-        response = session.get(url, headers=headers, timeout=15)
+        # Step 3: Try pulling data using a multi-parameter layout strategy
+        cache_buster = random.randint(10000, 99999)
         
-        print(f"[!] Server Network Response Status Code: {response.status_code}")
-        if response.status_code == 200:
-            raw_json = response.json()
-            extracted_rows = extract_data_robustly(raw_json)
-            if extracted_rows:
-                return extracted_rows
-            print("⚠️ Response payload verified, but live transaction data matrices are empty.")
+        # Parameter Strategy A: Standard direct api configuration
+        url_a = f"https://www.nseindia.com/api/large-deals?type={deal_type}&v={cache_buster}"
+        headers_a = {
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Referer": "https://www.nseindia.com/market-data/large-deals",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        
+        print(f"[+] Attacking primary cluster endpoint (Strategy A)...")
+        res = session.get(url_a, headers=headers_a, timeout=15)
+        if res.status_code == 200:
+            extracted = extract_data_robustly(res.json())
+            if extracted:
+                print(f"[+] Successfully extracted {len(extracted)} rows via Strategy A.")
+                return extracted
+
+        # Parameter Strategy B: Alternative historical dictionary configuration routing
+        mode = "bulk" if "bulk" in deal_type else "block"
+        url_b = f"https://www.nseindia.com/api/large-deals/{mode}?v={cache_buster}"
+        print(f"[!] Primary block empty. Attacking backup endpoint matrix (Strategy B)...")
+        res_b = session.get(url_b, headers=headers_a, timeout=15)
+        if res_b.status_code == 200:
+            extracted_b = extract_data_robustly(res_b.json())
+            if extracted_b:
+                print(f"[+] Successfully extracted {len(extracted_b)} rows via Strategy B.")
+                return extracted_b
+                
     except Exception as e:
-        print(f"[-] Advanced tracking framework connection error: {str(e)}")
-        
+        print(f"[-] Data sync sequence pipeline error: {str(e)}")
+    finally:
+        if session:
+            session.close()
+            
     return []
 
 def clear_and_reset_tab(worksheet, headers):
@@ -90,7 +101,7 @@ def clear_and_reset_tab(worksheet, headers):
         if row_count > 2:
             worksheet.delete_rows(3, row_count)
     except Exception as e:
-        print(f"[!] Workspace row initialization note: {e}")
+        print(f"[!] Grid truncation cleanup note: {e}")
     worksheet.update(range_name='A2', values=[headers], value_input_option='USER_ENTERED')
 
 def pipeline_sync_to_sheets():
@@ -98,7 +109,7 @@ def pipeline_sync_to_sheets():
     
     creds_json = os.environ.get("GOOGLE_CREDS_SECRET")
     if not creds_json:
-        raise ValueError("CRITICAL ERROR: GOOGLE_CREDS_SECRET environment variable is missing!")
+        raise ValueError("CRITICAL ERROR: GOOGLE_CREDS_SECRET repository environment variable is missing!")
         
     creds_dict = json.loads(creds_json)
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -144,10 +155,10 @@ def pipeline_sync_to_sheets():
         if rows_to_write:
             clear_and_reset_tab(bulk_tab, BULK_HEADERS)
             bulk_tab.append_rows(rows_to_write, value_input_option="USER_ENTERED")
-            print(f"✅ Target Verification Passed: {len(rows_to_write)} Bulk Deal rows synchronized.")
+            print(f"✅ Target Verification Passed: {len(rows_to_write)} Bulk Deal rows written.")
             any_data_synced = True
     else:
-        print("⚠️ Transaction array unpopulated. Deploying standard cell placeholders.")
+        print("⚠️ Transaction array unpopulated. Deploying cell placeholders.")
         clear_and_reset_tab(bulk_tab, BULK_HEADERS)
         bulk_tab.append_rows([["—", "No transactions logged on the exchange today.", "—", "—", "—", 0, 0, 0, "—", "—", "—"]], value_input_option="USER_ENTERED")
 
@@ -181,10 +192,10 @@ def pipeline_sync_to_sheets():
         if rows_to_write:
             clear_and_reset_tab(block_tab, BLOCK_HEADERS)
             block_tab.append_rows(rows_to_write, value_input_option="USER_ENTERED")
-            print(f"✅ Target Verification Passed: {len(rows_to_write)} Block Deal rows synchronized.")
+            print(f"✅ Target Verification Passed: {len(rows_to_write)} Block Deal rows written.")
             any_data_synced = True
     else:
-        print("⚠️ Transaction array unpopulated. Deploying standard cell placeholders.")
+        print("⚠️ Transaction array unpopulated. Deploying cell placeholders.")
         clear_and_reset_tab(block_tab, BLOCK_HEADERS)
         block_tab.append_rows([["—", "No transactions logged on the exchange today.", "—", "—", "—", 0, 0, 0, "—", "—"]], value_input_option="USER_ENTERED")
 
