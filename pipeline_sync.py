@@ -9,7 +9,7 @@ from curl_cffi import requests
 # ══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION ENGINE
 # ══════════════════════════════════════════════════════════════════════════
-SPREADSHEET_ID = "1vnrsybq4tX4BFvDupY5y8oxFLh0LyuPF_dm-viSqxWM"  # <-- Paste your actual Google Sheet ID string here
+SPREADSHEET_ID = "1vnrsybq4tX4BFvDupY5y8oxFLh0LyuPF_dm-viSqxWM"  # <-- Make sure your real Sheet ID string is pasted here
 
 BULK_HEADERS = ['DATE', 'SYMBOL', 'SECURITY NAME', 'CLIENT NAME', 'TYPE', 'QUANTITY', 'EXECUTION PRICE', 'VALUE (₹ CR)', 'INSTITUTION_FLAG', 'SIZE INDEX', 'SIGNAL FIELD']
 BLOCK_HEADERS = ['DATE', 'SYMBOL', 'SECURITY NAME', 'CLIENT NAME', 'TYPE', 'QUANTITY', 'PRICE', 'VALUE (₹ CR)', 'INSTITUTION_FLAG', 'INTERCEPT SIGNAL']
@@ -21,11 +21,15 @@ INSTITUTIONS = [
 ]
 
 def fetch_nse_large_deals(deal_type="bulk_deals"):
-    """Fetches transaction data by hard-binding to NSE's required cookie architecture."""
+    """Fetches transaction data by target routing to modern NSE standalone resource paths."""
     cache_buster = random.randint(10000, 99999)
-    url = f"https://www.nseindia.com/api/large-deals?type={deal_type}&v={cache_buster}"
     
-    # Complete real-world header footprint to ensure the exchange accepts the identity
+    # FIX: Route directly to the modern structural paths instead of old query strings
+    if deal_type == "bulk_deals":
+        url = f"https://www.nseindia.com/api/large-deals/bulk?v={cache_buster}"
+    else:
+        url = f"https://www.nseindia.com/api/large-deals/block?v={cache_buster}"
+        
     base_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -35,29 +39,28 @@ def fetch_nse_large_deals(deal_type="bulk_deals"):
     }
     
     try:
-        # Spawn a hardened browser session instance
         session = requests.Session(impersonate="chrome")
         session.headers.update(base_headers)
         
-        # STEP 1: Hit the root domain to trigger base cookies
+        # Step 1: Hit root domain for core cookie state assignment
         print("[+] Step 1: Requesting root exchange tokens...")
-        r1 = session.get("https://www.nseindia.com/", timeout=15)
+        session.get("https://www.nseindia.com/", timeout=15)
         time.sleep(2)
         
-        # STEP 2: Hit the market data landing page to inherit localized security cookies
+        # Step 2: Hit landing page container to grab security tracking keys
         print("[+] Step 2: Extracting structural tracking keys...")
-        r2 = session.get("https://www.nseindia.com/market-data/large-deals", timeout=15)
+        session.get("https://www.nseindia.com/market-data/large-deals", timeout=15)
         time.sleep(2)
         
-        # Update headers specifically for the backend AJAX API request
+        # AJAX Endpoint specific transmission headers
         api_headers = {
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "Referer": "https://www.nseindia.com/market-data/large-deals",
             "X-Requested-With": "XMLHttpRequest"
         }
         
-        # STEP 3: Request the active data pool
-        print(f"[+] Step 3: Pushing final data stream request for {deal_type}...")
+        # Step 3: Call the updated URL path directly
+        print(f"[+] Step 3: Requesting direct path stream from: {url}")
         response = session.get(url, headers=api_headers, timeout=15)
         
         print(f"[!] Server Network Response Status Code: {response.status_code}")
@@ -65,19 +68,16 @@ def fetch_nse_large_deals(deal_type="bulk_deals"):
         if response.status_code == 200:
             raw_data = response.json()
             
-            # --- DEBUG LOGGING: Let's see exactly what keys the server returned ---
-            print(f"[DEBUG] Raw JSON Keys Received: {list(raw_data.keys()) if isinstance(raw_data, dict) else 'Not a Dictionary'}")
-            
-            # Extract data safely regardless of structural casing
+            # Extract lists cleanly out of the JSON response block
             if isinstance(raw_data, dict):
+                # The modern endpoint uses lowercase 'data' array nesting
                 data_list = raw_data.get('data', raw_data.get('DATA', []))
                 if isinstance(data_list, list) and len(data_list) > 0:
                     return data_list
-                    
             elif isinstance(raw_data, list):
                 return raw_data
                 
-            print("⚠️ Server sent a valid connection, but the data array itself is empty.")
+            print("⚠️ Endpoint route hit cleanly, but active transaction list arrays are currently empty.")
             
     except Exception as e:
         print(f"[-] Critical exception during data pull sequence: {str(e)}")
@@ -90,7 +90,7 @@ def clear_and_reset_tab(worksheet, headers):
         if row_count > 2:
             worksheet.delete_rows(3, row_count)
     except Exception as e:
-        print(f"[!] Cleanup alert: {e}")
+        print(f"[!] Truncation maintenance note: {e}")
     worksheet.update(range_name='A2', values=[headers], value_input_option='USER_ENTERED')
 
 def pipeline_sync_to_sheets():
