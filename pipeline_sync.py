@@ -20,79 +20,68 @@ INSTITUTIONS = [
     'GOLDMAN SACHS', 'NOMURA', 'CLSA', 'SOCIETE GENERALE', 'LIC', 'BLACKROCK'
 ]
 
-def extract_data_robustly(json_response):
-    """Dynamic scanner that hunts across all potential JSON object shapes to extract lists."""
-    if isinstance(json_response, list):
-        return json_response
-    if isinstance(json_response, dict):
-        # Look for typical data containment blocks used by the exchange
-        for key in ['data', 'DATA', 'bulk_deals_data', 'block_deals_data', 'bulkDeals', 'blockDeals', 'dataList']:
-            val = json_response.get(key)
-            if isinstance(val, list) and len(val) > 0:
-                return val
-            elif isinstance(val, dict):
-                for sub_key in ['data', 'DATA', 'dataList']:
-                    sub_val = val.get(sub_key)
-                    if isinstance(sub_val, list) and len(sub_val) > 0:
-                        return sub_val
-        # Emergency escape hatch: if any root key holds a non-empty array, extract it
-        for val in json_response.values():
-            if isinstance(val, list) and len(val) > 0:
-                return val
-    return []
-
 def fetch_nse_large_deals(deal_type="bulk_deals"):
-    """Fetches transaction data using an adaptive browser session emulation layer."""
-    session = None
+    """Fetches transaction data by hard-binding to NSE's required cookie architecture."""
+    cache_buster = random.randint(10000, 99999)
+    url = f"https://www.nseindia.com/api/large-deals?type={deal_type}&v={cache_buster}"
+    
+    # Complete real-world header footprint to ensure the exchange accepts the identity
+    base_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive"
+    }
+    
     try:
-        # Spawn a hardened Chrome instance via curl_cffi
+        # Spawn a hardened browser session instance
         session = requests.Session(impersonate="chrome")
+        session.headers.update(base_headers)
         
-        # Step 1: Pre-warm base application cookies at the primary domain root
-        print(f"[+] Initializing endpoint handshakes for {deal_type}...")
-        session.get("https://www.nseindia.com/", timeout=15)
+        # STEP 1: Hit the root domain to trigger base cookies
+        print("[+] Step 1: Requesting root exchange tokens...")
+        r1 = session.get("https://www.nseindia.com/", timeout=15)
         time.sleep(2)
         
-        # Step 2: Establish transaction tracking framework cookies
-        session.get("https://www.nseindia.com/market-data/large-deals", timeout=15)
-        time.sleep(3)
+        # STEP 2: Hit the market data landing page to inherit localized security cookies
+        print("[+] Step 2: Extracting structural tracking keys...")
+        r2 = session.get("https://www.nseindia.com/market-data/large-deals", timeout=15)
+        time.sleep(2)
         
-        # Step 3: Try pulling data using a multi-parameter layout strategy
-        cache_buster = random.randint(10000, 99999)
-        
-        # Parameter Strategy A: Standard direct api configuration
-        url_a = f"https://www.nseindia.com/api/large-deals?type={deal_type}&v={cache_buster}"
-        headers_a = {
+        # Update headers specifically for the backend AJAX API request
+        api_headers = {
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "Referer": "https://www.nseindia.com/market-data/large-deals",
             "X-Requested-With": "XMLHttpRequest"
         }
         
-        print(f"[+] Attacking primary cluster endpoint (Strategy A)...")
-        res = session.get(url_a, headers=headers_a, timeout=15)
-        if res.status_code == 200:
-            extracted = extract_data_robustly(res.json())
-            if extracted:
-                print(f"[+] Successfully extracted {len(extracted)} rows via Strategy A.")
-                return extracted
-
-        # Parameter Strategy B: Alternative historical dictionary configuration routing
-        mode = "bulk" if "bulk" in deal_type else "block"
-        url_b = f"https://www.nseindia.com/api/large-deals/{mode}?v={cache_buster}"
-        print(f"[!] Primary block empty. Attacking backup endpoint matrix (Strategy B)...")
-        res_b = session.get(url_b, headers=headers_a, timeout=15)
-        if res_b.status_code == 200:
-            extracted_b = extract_data_robustly(res_b.json())
-            if extracted_b:
-                print(f"[+] Successfully extracted {len(extracted_b)} rows via Strategy B.")
-                return extracted_b
-                
-    except Exception as e:
-        print(f"[-] Data sync sequence pipeline error: {str(e)}")
-    finally:
-        if session:
-            session.close()
+        # STEP 3: Request the active data pool
+        print(f"[+] Step 3: Pushing final data stream request for {deal_type}...")
+        response = session.get(url, headers=api_headers, timeout=15)
+        
+        print(f"[!] Server Network Response Status Code: {response.status_code}")
+        
+        if response.status_code == 200:
+            raw_data = response.json()
             
+            # --- DEBUG LOGGING: Let's see exactly what keys the server returned ---
+            print(f"[DEBUG] Raw JSON Keys Received: {list(raw_data.keys()) if isinstance(raw_data, dict) else 'Not a Dictionary'}")
+            
+            # Extract data safely regardless of structural casing
+            if isinstance(raw_data, dict):
+                data_list = raw_data.get('data', raw_data.get('DATA', []))
+                if isinstance(data_list, list) and len(data_list) > 0:
+                    return data_list
+                    
+            elif isinstance(raw_data, list):
+                return raw_data
+                
+            print("⚠️ Server sent a valid connection, but the data array itself is empty.")
+            
+    except Exception as e:
+        print(f"[-] Critical exception during data pull sequence: {str(e)}")
+        
     return []
 
 def clear_and_reset_tab(worksheet, headers):
@@ -101,7 +90,7 @@ def clear_and_reset_tab(worksheet, headers):
         if row_count > 2:
             worksheet.delete_rows(3, row_count)
     except Exception as e:
-        print(f"[!] Grid truncation cleanup note: {e}")
+        print(f"[!] Cleanup alert: {e}")
     worksheet.update(range_name='A2', values=[headers], value_input_option='USER_ENTERED')
 
 def pipeline_sync_to_sheets():
@@ -109,7 +98,7 @@ def pipeline_sync_to_sheets():
     
     creds_json = os.environ.get("GOOGLE_CREDS_SECRET")
     if not creds_json:
-        raise ValueError("CRITICAL ERROR: GOOGLE_CREDS_SECRET repository environment variable is missing!")
+        raise ValueError("CRITICAL ERROR: GOOGLE_CREDS_SECRET repository variable is completely empty!")
         
     creds_dict = json.loads(creds_json)
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -129,17 +118,17 @@ def pipeline_sync_to_sheets():
         for item in bulk_data:
             if not item or not isinstance(item, dict): continue
             
-            sym_raw = item.get('BD_SYMBOL', item.get('symbol', item.get('mkt', '')))
+            sym_raw = item.get('BD_SYMBOL', item.get('symbol', ''))
             if not sym_raw: continue
             
             sym = f"NSE:{str(sym_raw).upper()}"
-            client_name = item.get('BD_CLIENT_NAME', item.get('clientName', item.get('client', '—')))
-            bs = str(item.get('BD_BUY_SELL', item.get('buySell', item.get('action', '')))).upper()
-            qty = float(item.get('BD_QTY_TRD', item.get('quantity', item.get('qty', 0))))
-            px = float(item.get('BD_TP_WATP', item.get('price', item.get('px', 0))))
+            client_name = item.get('BD_CLIENT_NAME', item.get('clientName', '—'))
+            bs = str(item.get('BD_BUY_SELL', item.get('buySell', ''))).upper()
+            qty = float(item.get('BD_QTY_TRD', item.get('quantity', 0)))
+            px = float(item.get('BD_TP_WATP', item.get('price', 0)))
             cr_val = round((qty * px) / 1e7, 2)
             
-            is_buy = "BUY" in bs or "B" == bs
+            is_buy = "BUY" in bs
             is_inst = "YES" if any(inst in client_name.upper() for inst in INSTITUTIONS) else "—"
             size_index = "🟠 LARGE" if cr_val >= 50 else "⚪ MINOR"
             
@@ -147,8 +136,8 @@ def pipeline_sync_to_sheets():
                      "🏛️ INST SELL ⚠️" if (is_inst == "YES" and not is_buy) else "📊 POSITION ACCUMULATION"
             
             rows_to_write.append([
-                item.get('BD_DT_DATE', item.get('date', time.strftime("%d-%b-%Y"))),
-                sym, item.get('BD_SCRIP_NAME', item.get('name', item.get('scrip', '—'))),
+                item.get('BD_DT_DATE', item.get('date', '')),
+                sym, item.get('BD_SCRIP_NAME', item.get('name', '—')),
                 client_name, "BUY" if is_buy else "SELL", qty, px, cr_val, is_inst, size_index, signal
             ])
             
@@ -158,7 +147,7 @@ def pipeline_sync_to_sheets():
             print(f"✅ Target Verification Passed: {len(rows_to_write)} Bulk Deal rows written.")
             any_data_synced = True
     else:
-        print("⚠️ Transaction array unpopulated. Deploying cell placeholders.")
+        print("⚠️ Bulk data array empty. Stamping placeholder.")
         clear_and_reset_tab(bulk_tab, BULK_HEADERS)
         bulk_tab.append_rows([["—", "No transactions logged on the exchange today.", "—", "—", "—", 0, 0, 0, "—", "—", "—"]], value_input_option="USER_ENTERED")
 
@@ -172,20 +161,20 @@ def pipeline_sync_to_sheets():
         for item in block_data:
             if not item or not isinstance(item, dict): continue
             
-            sym_raw = item.get('BD_SYMBOL', item.get('symbol', item.get('mkt', '')))
+            sym_raw = item.get('BD_SYMBOL', item.get('symbol', ''))
             if not sym_raw: continue
             
             sym = f"NSE:{str(sym_raw).upper()}"
-            client_name = item.get('BD_CLIENT_NAME', item.get('clientName', item.get('client', '—')))
-            bs = str(item.get('BD_BUY_SELL', item.get('buySell', item.get('action', '')))).upper()
-            qty = float(item.get('BD_QTY_TRD', item.get('quantity', item.get('qty', 0))))
-            px = float(item.get('BD_TP_WATP', item.get('price', item.get('px', 0))))
+            client_name = item.get('BD_CLIENT_NAME', item.get('clientName', '—'))
+            bs = str(item.get('BD_BUY_SELL', item.get('buySell', ''))).upper()
+            qty = float(item.get('BD_QTY_TRD', item.get('quantity', 0)))
+            px = float(item.get('BD_TP_WATP', item.get('price', 0)))
             cr_val = round((qty * px) / 1e7, 2)
             
             rows_to_write.append([
-                item.get('BD_DT_DATE', item.get('date', time.strftime("%d-%b-%Y"))),
-                sym, item.get('BD_SCRIP_NAME', item.get('name', item.get('scrip', '—'))),
-                client_name, "BUY" if ("BUY" in bs or "B" == bs) else "SELL",
+                item.get('BD_DT_DATE', item.get('date', '')),
+                sym, item.get('BD_SCRIP_NAME', item.get('name', '—')),
+                client_name, "BUY" if "BUY" in bs else "SELL",
                 qty, px, cr_val, "YES", "🧱 CONSOLIDATION CROSS"
             ])
             
@@ -195,23 +184,21 @@ def pipeline_sync_to_sheets():
             print(f"✅ Target Verification Passed: {len(rows_to_write)} Block Deal rows written.")
             any_data_synced = True
     else:
-        print("⚠️ Transaction array unpopulated. Deploying cell placeholders.")
+        print("⚠️ Block data array empty. Stamping placeholder.")
         clear_and_reset_tab(block_tab, BLOCK_HEADERS)
         block_tab.append_rows([["—", "No transactions logged on the exchange today.", "—", "—", "—", 0, 0, 0, "—", "—"]], value_input_option="USER_ENTERED")
 
-    # ---- 3. UPDATE LIVE DASHBOARD STAMP STATUS ----
+    # ---- 3. DASHBOARD STATUS UPDATE ----
     try:
         dash_tab = sheet.worksheet("🎯 Platform Dashboard")
         sync_time = time.strftime("%d %b %Y @ %H:%M IST", time.localtime(time.time() + 19800))
-        
         status_text = f"System Sync Status: Active via Actions Engine Pipeline | Last Data Lock: {sync_time}"
         if not any_data_synced:
             status_text += " (Market Dormant/Offline)"
-            
         dash_tab.update(range_name='A2', values=[[status_text]], value_input_option='USER_ENTERED')
-        print("📊 Dashboard status flag updated successfully.")
+        print("📊 Dashboard status flag locked successfully.")
     except Exception as e:
-        print(f"[-] Dashboard tracker stamp update bypassed: {e}")
+        print(f"[-] Dashboard status update skipped: {e}")
 
 if __name__ == "__main__":
     pipeline_sync_to_sheets()
