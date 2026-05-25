@@ -1,12 +1,10 @@
 import os
 import json
 import time
-import random
-import urllib.parse
-import requests
 import pandas as pd
 import gspread
 
+from playwright.sync_api import sync_playwright
 from google.oauth2.service_account import Credentials
 
 
@@ -21,9 +19,6 @@ def auth_google():
 
     creds_json = os.environ.get("GOOGLE_CREDS_SECRET")
 
-    if not creds_json:
-        raise Exception("GOOGLE_CREDS_SECRET missing")
-
     creds_dict = json.loads(creds_json)
 
     scopes = [
@@ -36,99 +31,54 @@ def auth_google():
         scopes=scopes
     )
 
-    client = gspread.authorize(creds)
-
-    return client
+    return gspread.authorize(creds)
 
 
 # =========================
-# NSE SESSION
-# =========================
-
-def create_session():
-
-    session = requests.Session()
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.nseindia.com/",
-        "Connection": "keep-alive"
-    }
-
-    session.headers.update(headers)
-
-    # IMPORTANT
-    session.get(
-        "https://www.nseindia.com",
-        timeout=20
-    )
-
-    time.sleep(3)
-
-    return session
-
-
-# =========================
-# FETCH NSE DATA
+# NSE FETCH
 # =========================
 
 def fetch_nse_data(deal_type="Bulk deals"):
 
-    session = create_session()
+    with sync_playwright() as p:
 
-    encoded_type = urllib.parse.quote(deal_type)
+        browser = p.chromium.launch(
+            headless=True
+        )
 
-    urls = [
+        page = browser.new_page()
 
-        f"https://www.nseindia.com/api/historicalOR/bulk-block-short-deals?dealType={encoded_type}",
+        page.goto(
+            "https://www.nseindia.com/report-detail/display-bulk-and-block-deals",
+            wait_until="networkidle",
+            timeout=120000
+        )
 
-        f"https://www.nseindia.com/api/historicalOR/bulk-block-short-deals?dealType={encoded_type}&from=01-01-2025&to=31-12-2026"
-    ]
+        time.sleep(5)
 
-    for url in urls:
+        if deal_type == "Bulk deals":
 
-        try:
-
-            print(f"Trying URL: {url}")
-
-            response = session.get(
-                url,
-                timeout=30,
-                headers={
-                    "Accept": "application/json, text/plain, */*",
-                    "Referer": "https://www.nseindia.com/report-detail/display-bulk-and-block-deals",
-                    "User-Agent": "Mozilla/5.0",
-                    "X-Requested-With": "XMLHttpRequest"
-                }
+            api_url = (
+                "https://www.nseindia.com/api/"
+                "historicalOR/bulk-block-short-deals"
+                "?dealType=Bulk%20deals"
             )
 
-            print("Status Code:", response.status_code)
+        else:
 
-            if response.status_code != 200:
-                continue
+            api_url = (
+                "https://www.nseindia.com/api/"
+                "historicalOR/bulk-block-short-deals"
+                "?dealType=Block%20deals"
+            )
 
-            data = response.json()
+        response = page.goto(api_url)
 
-            if isinstance(data, dict):
+        data = response.json()
 
-                rows = data.get("data", [])
+        browser.close()
 
-                print("Rows Found:", len(rows))
-
-                if rows:
-                    return rows
-
-        except Exception as e:
-
-            print("Fetch Error:", str(e))
-
-    return []
+        return data.get("data", [])
 
 
 # =========================
@@ -144,7 +94,10 @@ def build_dataframe(data):
         qty = float(item.get("quantity", 0) or 0)
         price = float(item.get("price", 0) or 0)
 
-        value_cr = round((qty * price) / 10000000, 2)
+        value_cr = round(
+            (qty * price) / 10000000,
+            2
+        )
 
         rows.append([
             item.get("date", ""),
@@ -157,45 +110,43 @@ def build_dataframe(data):
             value_cr
         ])
 
-    df = pd.DataFrame(rows, columns=[
-        "DATE",
-        "SYMBOL",
-        "SECURITY NAME",
-        "CLIENT NAME",
-        "TYPE",
-        "QUANTITY",
-        "PRICE",
-        "VALUE_CR"
-    ])
-
-    return df
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "DATE",
+            "SYMBOL",
+            "SECURITY NAME",
+            "CLIENT NAME",
+            "TYPE",
+            "QUANTITY",
+            "PRICE",
+            "VALUE_CR"
+        ]
+    )
 
 
 # =========================
-# WRITE TO GOOGLE SHEETS
+# UPDATE SHEET
 # =========================
 
-def update_sheet(worksheet, dataframe):
+def update_sheet(ws, df):
 
-    worksheet.clear()
+    ws.clear()
 
-    if dataframe.empty:
+    if df.empty:
 
-        worksheet.update(
+        ws.update(
             "A1",
-            [["NO DATA RETURNED FROM NSE"]]
+            [["NO DATA RETURNED"]]
         )
 
         return
 
-    values = [
-        dataframe.columns.tolist()
-    ] + dataframe.values.tolist()
+    values = [df.columns.tolist()] + df.values.tolist()
 
-    worksheet.update(
+    ws.update(
         "A1",
-        values,
-        value_input_option="USER_ENTERED"
+        values
     )
 
 
@@ -205,66 +156,55 @@ def update_sheet(worksheet, dataframe):
 
 def main():
 
-    print("STARTING NSE SYNC")
-
     client = auth_google()
 
-    spreadsheet = client.open_by_key(SPREADSHEET_ID)
+    spreadsheet = client.open_by_key(
+        SPREADSHEET_ID
+    )
 
-    # ================= BULK =================
+    # BULK
 
-    print("FETCHING BULK DEALS")
+    bulk_data = fetch_nse_data(
+        "Bulk deals"
+    )
 
-    bulk_data = fetch_nse_data("Bulk deals")
+    print("Bulk Records:", len(bulk_data))
 
-    print("BULK RECORDS:", len(bulk_data))
+    bulk_df = build_dataframe(
+        bulk_data
+    )
 
-    bulk_df = build_dataframe(bulk_data)
-
-    bulk_sheet = spreadsheet.worksheet("📦 Bulk Deals")
+    bulk_ws = spreadsheet.worksheet(
+        "📦 Bulk Deals"
+    )
 
     update_sheet(
-        bulk_sheet,
+        bulk_ws,
         bulk_df
     )
 
-    # ================= BLOCK =================
+    # BLOCK
 
-    print("FETCHING BLOCK DEALS")
+    block_data = fetch_nse_data(
+        "Block deals"
+    )
 
-    block_data = fetch_nse_data("Block deals")
+    print("Block Records:", len(block_data))
 
-    print("BLOCK RECORDS:", len(block_data))
+    block_df = build_dataframe(
+        block_data
+    )
 
-    block_df = build_dataframe(block_data)
-
-    block_sheet = spreadsheet.worksheet("🧱 Block Deals")
+    block_ws = spreadsheet.worksheet(
+        "🧱 Block Deals"
+    )
 
     update_sheet(
-        block_sheet,
+        block_ws,
         block_df
     )
 
-    # ================= DASHBOARD =================
-
-    try:
-
-        dashboard = spreadsheet.worksheet("🎯 Platform Dashboard")
-
-        current_time = time.strftime(
-            "%d-%m-%Y %H:%M:%S"
-        )
-
-        dashboard.update(
-            "A2",
-            [[f"✅ LAST SYNC SUCCESSFUL : {current_time}"]]
-        )
-
-    except Exception as e:
-
-        print("Dashboard Update Error:", str(e))
-
-    print("SYNC COMPLETED")
+    print("SYNC COMPLETE")
 
 
 if __name__ == "__main__":
