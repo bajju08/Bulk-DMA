@@ -9,7 +9,7 @@ from google.oauth2.service_account import Credentials
 # ══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION ENGINE
 # ══════════════════════════════════════════════════════════════════════════
-SPREADSHEET_ID = "1vnrsybq4tX4BFvDupY5y8oxFLh0LyuPF_dm-viSqxWM"  # <-- Ensure your real Sheet ID string is pasted here
+SPREADSHEET_ID = "1vnrsybq4tX4BFvDupY5y8oxFLh0LyuPF_dm-viSqxWM"  # <-- Paste your actual Google Sheet ID here
 
 BULK_HEADERS = ['DATE', 'SYMBOL', 'SECURITY NAME', 'CLIENT NAME', 'TYPE', 'QUANTITY', 'EXECUTION PRICE', 'VALUE (₹ CR)', 'INSTITUTION_FLAG', 'SIZE INDEX', 'SIGNAL FIELD']
 BLOCK_HEADERS = ['DATE', 'SYMBOL', 'SECURITY NAME', 'CLIENT NAME', 'TYPE', 'QUANTITY', 'PRICE', 'VALUE (₹ CR)', 'INSTITUTION_FLAG', 'INTERCEPT SIGNAL']
@@ -21,42 +21,33 @@ INSTITUTIONS = [
 ]
 
 def extract_data_robustly(json_response):
-    """
-    Scans the JSON payload dynamically to find the deal rows,
-    handling nested dictionaries, mixed casing, or direct arrays.
-    """
+    """Scans the JSON payload dynamically to find the deal rows."""
     if isinstance(json_response, list):
         return json_response
-        
     if isinstance(json_response, dict):
-        # Check standard targets
         for key in ['data', 'DATA', 'bulk_deals_data', 'block_deals_data', 'bulkDeals', 'blockDeals']:
             val = json_response.get(key)
             if isinstance(val, list) and len(val) > 0:
                 return val
             elif isinstance(val, dict):
-                # Handle cases where it is double-nested: response['data']['data']
                 for sub_key in ['data', 'DATA']:
                     sub_val = val.get(sub_key)
                     if isinstance(sub_val, list) and len(sub_val) > 0:
                         return sub_val
-                        
-        # Ultimate fallback: if any key holds a non-empty list, use it
         for val in json_response.values():
             if isinstance(val, list) and len(val) > 0:
                 return val
-                
     return []
 
 def fetch_nse_large_deals(deal_type="bulk_deals"):
-    """Fetches real-time large deals by establishing a persistent browser session emulation layer."""
+    """Fetches large deals by reproducing a multi-stage browser sequence."""
     cache_buster = random.randint(10000, 99999)
     url = f"https://www.nseindia.com/api/large-deals?type={deal_type}&v={cache_buster}"
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate, br",
         "Referer": "https://www.nseindia.com/market-data/large-deals",
         "X-Requested-With": "XMLHttpRequest",
@@ -67,47 +58,39 @@ def fetch_nse_large_deals(deal_type="bulk_deals"):
     session.headers.update(headers)
     
     try:
-        # Step 1: Hit the home index page to establish valid cookie tokens
-        print(f"[+] Initializing cookie handshakes for {deal_type}...")
+        # Step 1: Hit the main root domain
+        print("[+] Phase 1: Waking up primary server domain connection...")
         session.get("https://www.nseindia.com/", timeout=15)
-        time.sleep(3) 
+        time.sleep(2)
         
-        # Step 2: Request the actual JSON API data stream
-        print(f"[+] Requesting data matrix from primary cluster...")
+        # Step 2: Hit the structural page container to download security cookies
+        print("[+] Phase 2: Simulating UI layout initialization...")
+        session.get("https://www.nseindia.com/market-data/large-deals", timeout=15)
+        time.sleep(3)
+        
+        # Step 3: Fetch the data stream directly
+        print(f"[+] Phase 3: Launching API data extraction for {deal_type}...")
         response = session.get(url, timeout=15)
         
+        print(f"[!] Server Network Response Status Code: {response.status_code}")
         if response.status_code == 200:
             raw_json = response.json()
             extracted_rows = extract_data_robustly(raw_json)
             if extracted_rows:
                 return extracted_rows
-            print("⚠️ Primary cluster parsed but no list values found inside JSON fields.")
+            print("⚠️ JSON payload parsed successfully, but transaction arrays are empty.")
     except Exception as e:
-        print(f"[-] Primary cluster tracking network block: {str(e)}")
-        
-    # Alternate Backup Node Routing Strategy
-    alt_url = f"https://www1.nseindia.com/api/large-deals?type={deal_type}&v={cache_buster}"
-    try:
-        print("[!] Activating fallback stream sequence architecture...")
-        time.sleep(2)
-        alt_response = session.get(alt_url, timeout=15)
-        if alt_response.status_code == 200:
-            extracted_rows = extract_data_robustly(alt_response.json())
-            if extracted_rows:
-                return extracted_rows
-    except Exception as e:
-        print(f"[-] Backup network framework unconfirmed: {str(e)}")
+        print(f"[-] Primary connection sequence exception: {str(e)}")
         
     return []
 
 def clear_and_reset_tab(worksheet, headers):
-    """Safely clears old entries while maintaining header layout grids."""
     try:
         row_count = worksheet.row_count
         if row_count > 2:
             worksheet.delete_rows(3, row_count)
     except Exception as e:
-        print(f"[!] Sheet format clean truncation bypassed: {e}")
+        print(f"[!] Cleanup notification: {e}")
     worksheet.update(range_name='A2', values=[headers], value_input_option='USER_ENTERED')
 
 def pipeline_sync_to_sheets():
@@ -135,7 +118,6 @@ def pipeline_sync_to_sheets():
         for item in bulk_data:
             if not item or not isinstance(item, dict): continue
             
-            # Universal key recovery fallback architecture
             sym_raw = item.get('BD_SYMBOL', item.get('symbol', item.get('mkt', '')))
             if not sym_raw: continue
             
@@ -165,7 +147,7 @@ def pipeline_sync_to_sheets():
             print(f"✅ Target Verification Passed: {len(rows_to_write)} Bulk Deal rows synchronized.")
             any_data_synced = True
     else:
-        print("走 Using placeholders for Bulk data.")
+        print("⚠️ Bulk data transaction array empty. Deploying sheet placeholders.")
         clear_and_reset_tab(bulk_tab, BULK_HEADERS)
         bulk_tab.append_rows([["—", "No transactions logged on the exchange today.", "—", "—", "—", 0, 0, 0, "—", "—", "—"]], value_input_option="USER_ENTERED")
 
@@ -202,7 +184,7 @@ def pipeline_sync_to_sheets():
             print(f"✅ Target Verification Passed: {len(rows_to_write)} Block Deal rows synchronized.")
             any_data_synced = True
     else:
-        print("走 Using placeholders for Block data.")
+        print("⚠️ Block data transaction array empty. Deploying sheet placeholders.")
         clear_and_reset_tab(block_tab, BLOCK_HEADERS)
         block_tab.append_rows([["—", "No transactions logged on the exchange today.", "—", "—", "—", 0, 0, 0, "—", "—"]], value_input_option="USER_ENTERED")
 
