@@ -2,14 +2,15 @@ import os
 import json
 import random
 import time
-import requests
 import gspread
 from google.oauth2.service_account import Credentials
+# Upgrading to curl_cffi to perfectly match the browser JA3 handshake signature
+from curl_cffi import requests
 
 # ══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION ENGINE
 # ══════════════════════════════════════════════════════════════════════════
-SPREADSHEET_ID = "1vnrsybq4tX4BFvDupY5y8oxFLh0LyuPF_dm-viSqxWM"  # <-- Paste your actual Google Sheet ID here
+SPREADSHEET_ID = "1vnrsybq4tX4BFvDupY5y8oxFLh0LyuPF_dm-viSqxWM"  # <-- Ensure your real Sheet ID string is pasted here
 
 BULK_HEADERS = ['DATE', 'SYMBOL', 'SECURITY NAME', 'CLIENT NAME', 'TYPE', 'QUANTITY', 'EXECUTION PRICE', 'VALUE (₹ CR)', 'INSTITUTION_FLAG', 'SIZE INDEX', 'SIGNAL FIELD']
 BLOCK_HEADERS = ['DATE', 'SYMBOL', 'SECURITY NAME', 'CLIENT NAME', 'TYPE', 'QUANTITY', 'PRICE', 'VALUE (₹ CR)', 'INSTITUTION_FLAG', 'INTERCEPT SIGNAL']
@@ -21,7 +22,7 @@ INSTITUTIONS = [
 ]
 
 def extract_data_robustly(json_response):
-    """Scans the JSON payload dynamically to find the deal rows."""
+    """Scans the JSON payload dynamically across nested keys to locate transaction rows."""
     if isinstance(json_response, list):
         return json_response
     if isinstance(json_response, dict):
@@ -40,37 +41,36 @@ def extract_data_robustly(json_response):
     return []
 
 def fetch_nse_large_deals(deal_type="bulk_deals"):
-    """Fetches large deals by reproducing a multi-stage browser sequence."""
+    """Fetches large deals using a hardened browser emulation session."""
     cache_buster = random.randint(10000, 99999)
     url = f"https://www.nseindia.com/api/large-deals?type={deal_type}&v={cache_buster}"
     
+    # Standard header dictionary routing structure
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         "Accept": "application/json, text/javascript, */*; q=0.01",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
         "Referer": "https://www.nseindia.com/market-data/large-deals",
-        "X-Requested-With": "XMLHttpRequest",
-        "Connection": "keep-alive"
+        "X-Requested-With": "XMLHttpRequest"
     }
     
-    session = requests.Session()
-    session.headers.update(headers)
-    
     try:
-        # Step 1: Hit the main root domain
-        print("[+] Phase 1: Waking up primary server domain connection...")
+        # Initialize the curl_cffi session explicitly impersonating a real Chrome browser instance
+        print(f"[+] Spawning browser session instance for {deal_type}...")
+        session = requests.Session(impersonate="chrome")
+        
+        # Phase 1: Establish base session cookies from the index landing domain
+        print("[+] Phase 1: Registering session tokens at home node...")
         session.get("https://www.nseindia.com/", timeout=15)
         time.sleep(2)
         
-        # Step 2: Hit the structural page container to download security cookies
-        print("[+] Phase 2: Simulating UI layout initialization...")
+        # Phase 2: Load the container template frame to unlock API pathways
+        print("[+] Phase 2: Syncing container framework context...")
         session.get("https://www.nseindia.com/market-data/large-deals", timeout=15)
         time.sleep(3)
         
-        # Step 3: Fetch the data stream directly
-        print(f"[+] Phase 3: Launching API data extraction for {deal_type}...")
-        response = session.get(url, timeout=15)
+        # Phase 3: Securely extract data payload directly from the active pipeline
+        print(f"[+] Phase 3: Requesting data stream with matched cipher signatures...")
+        response = session.get(url, headers=headers, timeout=15)
         
         print(f"[!] Server Network Response Status Code: {response.status_code}")
         if response.status_code == 200:
@@ -78,9 +78,9 @@ def fetch_nse_large_deals(deal_type="bulk_deals"):
             extracted_rows = extract_data_robustly(raw_json)
             if extracted_rows:
                 return extracted_rows
-            print("⚠️ JSON payload parsed successfully, but transaction arrays are empty.")
+            print("⚠️ Response payload verified, but live transaction data matrices are empty.")
     except Exception as e:
-        print(f"[-] Primary connection sequence exception: {str(e)}")
+        print(f"[-] Advanced tracking framework connection error: {str(e)}")
         
     return []
 
@@ -90,7 +90,7 @@ def clear_and_reset_tab(worksheet, headers):
         if row_count > 2:
             worksheet.delete_rows(3, row_count)
     except Exception as e:
-        print(f"[!] Cleanup notification: {e}")
+        print(f"[!] Workspace row initialization note: {e}")
     worksheet.update(range_name='A2', values=[headers], value_input_option='USER_ENTERED')
 
 def pipeline_sync_to_sheets():
@@ -147,7 +147,7 @@ def pipeline_sync_to_sheets():
             print(f"✅ Target Verification Passed: {len(rows_to_write)} Bulk Deal rows synchronized.")
             any_data_synced = True
     else:
-        print("⚠️ Bulk data transaction array empty. Deploying sheet placeholders.")
+        print("⚠️ Transaction array unpopulated. Deploying standard cell placeholders.")
         clear_and_reset_tab(bulk_tab, BULK_HEADERS)
         bulk_tab.append_rows([["—", "No transactions logged on the exchange today.", "—", "—", "—", 0, 0, 0, "—", "—", "—"]], value_input_option="USER_ENTERED")
 
@@ -184,7 +184,7 @@ def pipeline_sync_to_sheets():
             print(f"✅ Target Verification Passed: {len(rows_to_write)} Block Deal rows synchronized.")
             any_data_synced = True
     else:
-        print("⚠️ Block data transaction array empty. Deploying sheet placeholders.")
+        print("⚠️ Transaction array unpopulated. Deploying standard cell placeholders.")
         clear_and_reset_tab(block_tab, BLOCK_HEADERS)
         block_tab.append_rows([["—", "No transactions logged on the exchange today.", "—", "—", "—", 0, 0, 0, "—", "—"]], value_input_option="USER_ENTERED")
 
