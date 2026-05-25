@@ -1,6 +1,4 @@
-requests==2.31.0
-gspread==6.1.0
-google-auth==2.29.0
-curl_cffi==0.7.4
-gspread==6.1.0
-google-auth==2.29.0
+requests
+pandas
+gspread
+google-auth
