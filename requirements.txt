@@ -1,4 +1,4 @@
-requests
+playwright
 pandas
 gspread
 google-auth
