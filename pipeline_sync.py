@@ -39,17 +39,23 @@ def auth_google():
 # =========================
 
 def fetch_nse_data(deal_type="Bulk deals"):
-
+    import urllib.parse
     from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as p:
+    encoded_type = urllib.parse.quote(deal_type)
 
+    api_url = (
+        "https://www.nseindia.com/api/historicalOR/bulk-block-short-deals"
+        f"?dealType={encoded_type}"
+    )
+
+    with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
             args=[
                 "--disable-blink-features=AutomationControlled",
-                "--disable-http2"
-            ]
+                "--disable-http2",
+            ],
         )
 
         context = browser.new_context(
@@ -58,49 +64,49 @@ def fetch_nse_data(deal_type="Bulk deals"):
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
-            ignore_https_errors=True
-        )
-
-        page = context.new_page()
-
-        # First initialize cookies
-        page.goto(
-            "https://www.nseindia.com",
-            wait_until="domcontentloaded",
-            timeout=60000
-        )
-
-        time.sleep(5)
-
-        if deal_type == "Bulk deals":
-
-            api_url = (
-                "https://www.nseindia.com/api/"
-                "historicalOR/bulk-block-short-deals"
-                "?dealType=Bulk%20deals"
-            )
-
-        else:
-
-            api_url = (
-                "https://www.nseindia.com/api/"
-                "historicalOR/bulk-block-short-deals"
-                "?dealType=Block%20deals"
-            )
-
-        response = context.request.get(
-            api_url,
-            headers={
+            ignore_https_errors=True,
+            extra_http_headers={
                 "accept": "application/json, text/plain, */*",
                 "referer": "https://www.nseindia.com/",
-            }
+                "x-requested-with": "XMLHttpRequest",
+            },
         )
 
-        data = response.json()
+        request = context.request
+
+        # Light warm-up request, but do not fail if NSE times out here
+        try:
+            request.get("https://www.nseindia.com", timeout=15000)
+        except Exception as e:
+            print("Warm-up skipped:", str(e))
+
+        for attempt in range(5):
+            try:
+                print(f"Fetching {deal_type}, attempt {attempt + 1}")
+
+                response = request.get(api_url, timeout=30000)
+
+                print("Status Code:", response.status)
+
+                if response.status != 200:
+                    time.sleep(2)
+                    continue
+
+                data = response.json()
+                rows = data.get("data", [])
+
+                print("Rows Found:", len(rows))
+
+                if rows:
+                    browser.close()
+                    return rows
+
+            except Exception as e:
+                print("Fetch error:", str(e))
+                time.sleep(2)
 
         browser.close()
-
-        return data.get("data", [])
+        return []
 # =========================
 # BUILD DATAFRAME
 # =========================
